@@ -371,7 +371,7 @@ final class EthernetTracker {
     }
 
     private void maybeTrackInterface(String iface) {
-        if (!iface.matches(mIfaceMatch)) {
+        if (iface.matches(mIfaceMatch)) {
             return;
         }
 
