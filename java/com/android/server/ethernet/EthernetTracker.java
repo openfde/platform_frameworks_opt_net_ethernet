@@ -47,6 +47,8 @@ import java.io.FileDescriptor;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
+import java.io.InputStream;
+import java.io.IOException;
 
 /**
  * Tracks Ethernet interfaces and manages interface configurations.
@@ -328,6 +330,9 @@ final class EthernetTracker {
 
     private void updateInterfaceState(String iface, boolean up) {
         final int mode = getInterfaceMode(iface);
+        if (up) {
+            updateConfigStore(iface);
+        }
         final boolean factoryLinkStateUpdated = (mode == INTERFACE_MODE_CLIENT)
                 && mFactory.updateInterfaceLinkState(iface, up);
 
@@ -348,6 +353,49 @@ final class EthernetTracker {
                 }
             }
             mListeners.finishBroadcast();
+        }
+    }
+    private void nativeReadConfigStore() {
+        String commands = "/vendor/bin/ipconfigstore";
+        Process process = null;
+        try {
+            process = Runtime.getRuntime().exec(commands);
+            InputStream is = process.getInputStream();
+            StringBuilder msg = new StringBuilder("");
+            while (true) {
+                int c = is.read();
+                if (c == -1) {
+                    break;
+                }
+                msg.append((char) c);
+            }
+            InputStream es = process.getErrorStream();
+            StringBuilder emsg = new StringBuilder("");
+            while (true) {
+                int c = es.read();
+                if (c == -1) {
+                    break;
+                }
+                emsg.append((char) c);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "ignore exception", e);
+        } finally {
+            if (process != null) {
+                process.destroy();
+            }
+        }
+    }
+
+    private void updateConfigStore(String iface) {
+        nativeReadConfigStore();
+        mConfigStore.read();
+        mIpConfigForDefaultInterface = mConfigStore.getIpConfigurationForDefaultInterface();
+        final ArrayMap<String, IpConfiguration> configs = mConfigStore.getIpConfigurations();
+        if (configs.containsKey(iface)) {
+            mIpConfigurations.remove(iface);
+            mIpConfigurations.put(iface, configs.get(iface));
+            mHandler.post(() -> mFactory.updateIpConfiguration(iface, configs.get(iface)));
         }
     }
 
@@ -371,7 +419,7 @@ final class EthernetTracker {
     }
 
     private void maybeTrackInterface(String iface) {
-        if (iface.matches(mIfaceMatch)) {
+        if (!iface.matches(mIfaceMatch)) {
             return;
         }
 
@@ -425,6 +473,9 @@ final class EthernetTracker {
 
         @Override
         public void interfaceRemoved(String iface) {
+            if (iface.startsWith("wl")) {
+                return;
+            }
             mHandler.post(() -> stopTrackingInterface(iface));
         }
     }
