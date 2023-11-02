@@ -35,6 +35,7 @@ import android.os.INetworkManagementService;
 import android.os.RemoteCallbackList;
 import android.os.RemoteException;
 import android.os.ServiceManager;
+import android.os.SystemProperties;
 import android.text.TextUtils;
 import android.util.ArrayMap;
 import android.util.Log;
@@ -419,7 +420,7 @@ final class EthernetTracker {
     }
 
     private void maybeTrackInterface(String iface) {
-        if (!iface.matches(mIfaceMatch)) {
+        if (SystemProperties.getBoolean("persist.fde.e", false) ? iface.matches(mIfaceMatch) : !iface.matches(mIfaceMatch)) {
             return;
         }
 
@@ -667,7 +668,8 @@ final class EthernetTracker {
 
     private void updateIfaceMatchRegexp() {
         final String match = mContext.getResources().getString(
-                com.android.internal.R.string.config_ethernet_iface_regex);
+                SystemProperties.getBoolean("persist.fde.e", false) ? com.android.internal.R.string.config_ethernet_iface_blacklist_regex
+                : com.android.internal.R.string.config_ethernet_iface_regex);
         mIfaceMatch = mIncludeTestInterfaces
                 ? "(" + match + "|" + TEST_IFACE_REGEXP + ")"
                 : match;
