@@ -461,6 +461,9 @@ final class EthernetTracker {
 
         @Override
         public void interfaceLinkStateChanged(String iface, boolean up) {
+        if (SystemProperties.getBoolean("persist.fde.e", false) ? iface.matches(mIfaceMatch) : !iface.matches(mIfaceMatch)) {
+            return;
+        }
             if (DBG) {
                 Log.i(TAG, "interfaceLinkStateChanged, iface: " + iface + ", up: " + up);
             }
