@@ -13,10 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/*
-* wifi and usb share network interface use DefaultIpConfiguration
-* Solve the problem of network abnormality when switching wifi while the system is running.
-*/
+
 package com.android.server.ethernet;
 
 import static android.net.TestNetworkManager.TEST_TAP_PREFIX;
@@ -313,14 +310,9 @@ final class EthernetTracker {
 
         final int mode = getInterfaceMode(iface);
         if (mode == INTERFACE_MODE_CLIENT) {
-            IpConfiguration ipConfiguration = null;
-            if (iface.startsWith("wl") || iface.startsWith("usb")) {
+            IpConfiguration ipConfiguration = mIpConfigurations.get(iface);
+            if (ipConfiguration == null) {
                 ipConfiguration = createDefaultIpConfiguration();
-            } else {
-                ipConfiguration = mIpConfigurations.get(iface);
-                if (ipConfiguration == null) {
-                    ipConfiguration = createDefaultIpConfiguration();
-                }
             }
 
             Log.d(TAG, "Tracking interface in client mode: " + iface);
