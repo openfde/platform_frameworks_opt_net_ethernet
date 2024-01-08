@@ -18,10 +18,19 @@ package com.android.server.ethernet;
 
 import android.annotation.Nullable;
 import android.net.IpConfiguration;
+import android.net.IpConfiguration.IpAssignment;
+import android.net.IpConfiguration.ProxySettings;
+import android.net.LinkAddress;
+import android.net.NetworkUtils;
+import android.net.StaticIpConfiguration;
 import android.os.Environment;
 import android.util.ArrayMap;
 
 import com.android.server.net.IpConfigStore;
+
+import java.net.InetAddress;
+
+import lineageos.waydroid.Net;
 
 
 /**
@@ -69,6 +78,50 @@ public class EthernetConfigStore {
             if (modified) {
                 mStore.writeIpConfigurations(ipConfigFile, mIpConfigurations);
             }
+        }
+    }
+
+    public ArrayMap<String, IpConfiguration> readIpConfigurations(){
+        ArrayMap<String, IpConfiguration> networks = new ArrayMap<>();
+        Net net = Net.getInstance(null);
+        String ipConfigurationsFromHost = net.getLanAndWlanIpConfigurations();
+        if (ipConfigurationsFromHost == null || ipConfigurationsFromHost.isEmpty()) {
+            return networks;
+        }
+        String[] interfaceInfo = ipConfigurationsFromHost.split(";");
+        for (String i : interfaceInfo) {
+            String[] info = i.split("#");
+            String interfaceName = info[0];
+            StaticIpConfiguration staticIpConfiguration = new StaticIpConfiguration();
+            String ipHasPrefixLength = info.length > 1 ? info[1] : null;
+            if (ipHasPrefixLength != null) {
+                String[] ipAndPrefixLength = ipHasPrefixLength.split("/");
+                LinkAddress linkAddr = new LinkAddress(NetworkUtils.numericToInetAddress(ipAndPrefixLength[0]), Integer.parseInt(ipAndPrefixLength[1]));
+                staticIpConfiguration.ipAddress = linkAddr;
+            }
+            InetAddress gateway = NetworkUtils.numericToInetAddress(info.length > 2 ? info[2] : null);
+            staticIpConfiguration.gateway = gateway;
+            String dnss = info.length > 3 ? info[3] : null;
+            if (dnss == null || dnss.isEmpty()) {
+                dnss = "114.114.114.114";
+            }
+            String[] dnssL = dnss.split(" \\| ");
+            for (String d : dnssL) {
+                staticIpConfiguration.dnsServers.add(NetworkUtils.numericToInetAddress(d));
+            }
+            IpConfiguration config = new IpConfiguration();
+            networks.put(interfaceName, config);
+            config.staticIpConfiguration = staticIpConfiguration;
+            config.ipAssignment = IpAssignment.STATIC;
+            config.proxySettings = ProxySettings.NONE;
+        }
+        return networks;
+    }
+
+    public void constructIpConfigurations() {
+        synchronized (mSync) {
+            mIpConfigurations = readIpConfigurations();
+            mStore.writeIpConfigurations(ipConfigFile, mIpConfigurations);
         }
     }
 

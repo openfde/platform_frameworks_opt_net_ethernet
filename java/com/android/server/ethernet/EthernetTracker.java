@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+/*
+ * 1.judge interfaces if need to track throught binder api in host waydroid
+ */
 package com.android.server.ethernet;
 
 import static android.net.TestNetworkManager.TEST_TAP_PREFIX;
@@ -50,6 +52,8 @@ import java.util.ArrayList;
 import java.util.concurrent.ConcurrentHashMap;
 import java.io.InputStream;
 import java.io.IOException;
+
+import lineageos.waydroid.Net;
 
 /**
  * Tracks Ethernet interfaces and manages interface configurations.
@@ -105,6 +109,7 @@ final class EthernetTracker {
     // Tracks whether clients were notified that the tethered interface is available
     private boolean mTetheredInterfaceWasAvailable = false;
     private volatile IpConfiguration mIpConfigForDefaultInterface;
+    private Net net = Net.getInstance(null);
 
     private class TetheredInterfaceRequestList extends RemoteCallbackList<ITetheredInterfaceCallback> {
         @Override
@@ -120,7 +125,7 @@ final class EthernetTracker {
         // The services we use.
         IBinder b = ServiceManager.getService(Context.NETWORKMANAGEMENT_SERVICE);
         mNMService = INetworkManagementService.Stub.asInterface(b);
-
+        /*
         // Interface match regex.
         updateIfaceMatchRegexp();
 
@@ -130,7 +135,7 @@ final class EthernetTracker {
         for (String strConfig : interfaceConfigs) {
             parseEthernetConfig(strConfig);
         }
-
+        */
         mConfigStore = new EthernetConfigStore();
 
         NetworkCapabilities nc = createNetworkCapabilities(true /* clear default capabilities */);
@@ -139,7 +144,8 @@ final class EthernetTracker {
     }
 
     void start() {
-        mConfigStore.read();
+        //mConfigStore.read();
+        mConfigStore.constructIpConfigurations();
 
         // Default interface is just the first one we want to track.
         mIpConfigForDefaultInterface = mConfigStore.getIpConfigurationForDefaultInterface();
@@ -331,13 +337,13 @@ final class EthernetTracker {
 
     private void updateInterfaceState(String iface, boolean up) {
         final int mode = getInterfaceMode(iface);
-        if (up) {
-            updateConfigStore(iface);
-        }
         final boolean factoryLinkStateUpdated = (mode == INTERFACE_MODE_CLIENT)
                 && mFactory.updateInterfaceLinkState(iface, up);
 
         if (factoryLinkStateUpdated) {
+            if (up) {
+                updateConfigStore(iface);
+            }
             boolean restricted = isRestrictedInterface(iface);
             int n = mListeners.beginBroadcast();
             for (int i = 0; i < n; i++) {
@@ -356,41 +362,9 @@ final class EthernetTracker {
             mListeners.finishBroadcast();
         }
     }
-    private void nativeReadConfigStore() {
-        String commands = "/vendor/bin/ipconfigstore";
-        Process process = null;
-        try {
-            process = Runtime.getRuntime().exec(commands);
-            InputStream is = process.getInputStream();
-            StringBuilder msg = new StringBuilder("");
-            while (true) {
-                int c = is.read();
-                if (c == -1) {
-                    break;
-                }
-                msg.append((char) c);
-            }
-            InputStream es = process.getErrorStream();
-            StringBuilder emsg = new StringBuilder("");
-            while (true) {
-                int c = es.read();
-                if (c == -1) {
-                    break;
-                }
-                emsg.append((char) c);
-            }
-        } catch (IOException e) {
-            Log.e(TAG, "ignore exception", e);
-        } finally {
-            if (process != null) {
-                process.destroy();
-            }
-        }
-    }
 
     private void updateConfigStore(String iface) {
-        nativeReadConfigStore();
-        mConfigStore.read();
+        mConfigStore.constructIpConfigurations();
         mIpConfigForDefaultInterface = mConfigStore.getIpConfigurationForDefaultInterface();
         final ArrayMap<String, IpConfiguration> configs = mConfigStore.getIpConfigurations();
         if (configs.containsKey(iface)) {
@@ -420,7 +394,8 @@ final class EthernetTracker {
     }
 
     private void maybeTrackInterface(String iface) {
-        if (SystemProperties.getBoolean("persist.fde.e", false) ? iface.matches(mIfaceMatch) : !iface.matches(mIfaceMatch)) {
+        String interfaces = net.getLansAndWlans();
+        if (!interfaces.contains(iface)) {
             return;
         }
 
@@ -461,9 +436,10 @@ final class EthernetTracker {
 
         @Override
         public void interfaceLinkStateChanged(String iface, boolean up) {
-        if (SystemProperties.getBoolean("persist.fde.e", false) ? iface.matches(mIfaceMatch) : !iface.matches(mIfaceMatch)) {
-            return;
-        }
+            String interfaces = net.getLansAndWlans();
+            if (!interfaces.contains(iface)) {
+                return;
+            }
             if (DBG) {
                 Log.i(TAG, "interfaceLinkStateChanged, iface: " + iface + ", up: " + up);
             }
@@ -670,9 +646,7 @@ final class EthernetTracker {
     }
 
     private void updateIfaceMatchRegexp() {
-        final String match = mContext.getResources().getString(
-                SystemProperties.getBoolean("persist.fde.e", false) ? com.android.internal.R.string.config_ethernet_iface_blacklist_regex
-                : com.android.internal.R.string.config_ethernet_iface_regex);
+        final String match = mContext.getResources().getString(com.android.internal.R.string.config_ethernet_iface_regex);
         mIfaceMatch = mIncludeTestInterfaces
                 ? "(" + match + "|" + TEST_IFACE_REGEXP + ")"
                 : match;
