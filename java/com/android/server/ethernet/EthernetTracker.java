@@ -337,13 +337,13 @@ final class EthernetTracker {
 
     private void updateInterfaceState(String iface, boolean up) {
         final int mode = getInterfaceMode(iface);
+        if (up) {
+            updateConfigStore(iface);
+        }
         final boolean factoryLinkStateUpdated = (mode == INTERFACE_MODE_CLIENT)
                 && mFactory.updateInterfaceLinkState(iface, up);
 
         if (factoryLinkStateUpdated) {
-            if (up) {
-                updateConfigStore(iface);
-            }
             boolean restricted = isRestrictedInterface(iface);
             int n = mListeners.beginBroadcast();
             for (int i = 0; i < n; i++) {
@@ -370,7 +370,7 @@ final class EthernetTracker {
         if (configs.containsKey(iface)) {
             mIpConfigurations.remove(iface);
             mIpConfigurations.put(iface, configs.get(iface));
-            mHandler.post(() -> mFactory.updateIpConfiguration(iface, configs.get(iface)));
+            mFactory.updateIpConfiguration(iface, configs.get(iface));
         }
     }
 
@@ -394,11 +394,6 @@ final class EthernetTracker {
     }
 
     private void maybeTrackInterface(String iface) {
-        String interfaces = net.getLansAndWlans();
-        if (!interfaces.contains(iface)) {
-            return;
-        }
-
         // If we don't already track this interface, and if this interface matches
         // our regex, start tracking it.
         if (mFactory.hasInterface(iface) || iface.equals(mDefaultInterface)) {
@@ -423,8 +418,11 @@ final class EthernetTracker {
     private void trackAvailableInterfaces() {
         try {
             final String[] ifaces = mNMService.listInterfaces();
+            String interfaces = net.getLansAndWlans();
             for (String iface : ifaces) {
-                maybeTrackInterface(iface);
+                if (interfaces.contains(iface)) {
+                    maybeTrackInterface(iface);
+                }
             }
         } catch (RemoteException | IllegalStateException e) {
             Log.e(TAG, "Could not get list of interfaces " + e);
@@ -440,8 +438,22 @@ final class EthernetTracker {
             if (!interfaces.contains(iface)) {
                 return;
             }
+            //like usb wifi/ethernet,interface name maybe rename, such "eth0"->"enx112233445566",
+            //"wlan0"->"wlx112233445566", when hotplug;case we no chance to addInterface for rename's
+            if (up) {
+                mHandler.post(() -> maybeTrackInterface(iface));
+            }
             if (DBG) {
                 Log.i(TAG, "interfaceLinkStateChanged, iface: " + iface + ", up: " + up);
+            }
+            if (up && (net.ipConfiged(iface) == 0)) {
+                Log.i(TAG, "interfaceLinkStateChanged sleep");
+                try {
+                    Thread.sleep(500);
+                } catch (Exception ex) {
+                    Log.e(TAG, "interfaceLinkStateChanged, sleep Exception: " + ex);
+                }
+                return;
             }
             mHandler.post(() -> updateInterfaceState(iface, up));
         }
@@ -453,9 +465,6 @@ final class EthernetTracker {
 
         @Override
         public void interfaceRemoved(String iface) {
-            if (iface.startsWith("wl")) {
-                return;
-            }
             mHandler.post(() -> stopTrackingInterface(iface));
         }
     }
