@@ -53,7 +53,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.io.InputStream;
 import java.io.IOException;
 
-import lineageos.waydroid.Net;
+import android.openfde.Net;
 
 /**
  * Tracks Ethernet interfaces and manages interface configurations.

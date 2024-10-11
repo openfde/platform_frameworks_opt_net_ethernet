@@ -30,7 +30,7 @@ import com.android.server.net.IpConfigStore;
 
 import java.net.InetAddress;
 
-import lineageos.waydroid.Net;
+import android.openfde.Net;
 
 
 /**
