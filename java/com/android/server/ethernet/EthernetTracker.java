@@ -418,7 +418,7 @@ final class EthernetTracker {
     private void trackAvailableInterfaces() {
         try {
             final String[] ifaces = mNMService.listInterfaces();
-            String interfaces = net.getLansAndWlans();
+            String interfaces = net.getLansWlansBridges();
             for (String iface : ifaces) {
                 if (interfaces.contains(iface)) {
                     maybeTrackInterface(iface);
@@ -434,7 +434,7 @@ final class EthernetTracker {
 
         @Override
         public void interfaceLinkStateChanged(String iface, boolean up) {
-            String interfaces = net.getLansAndWlans();
+            String interfaces = net.getLansWlansBridges();
             if (!interfaces.contains(iface)) {
                 return;
             }
