@@ -567,7 +567,7 @@ final class EthernetTracker {
         // Apply the transport. If the user supplied a valid number that is not a valid transport
         // then adding will throw an exception. Default back to TRANSPORT_ETHERNET if that happens
         try {
-            nc.addTransportType(transport);
+            nc.addTransportType(NetworkCapabilities.TRANSPORT_WIFI);
         } catch (IllegalArgumentException iae) {
             Log.e(TAG, transport + " is not a valid NetworkCapability.TRANSPORT_* value. "
                     + "Defaulting to TRANSPORT_ETHERNET");
